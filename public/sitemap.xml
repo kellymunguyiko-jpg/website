@@ -3,7 +3,7 @@
 
   <!-- Home -->
   <url>
-    <loc>https://yourwebsite.com/</loc>
+    <loc>https://webcraft-free/</loc>
     <lastmod>2026-05-09</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
@@ -11,7 +11,7 @@
 
   <!-- About -->
   <url>
-    <loc>https://yourwebsite.com/about</loc>
+    <loc>https://webcraft-free/about</loc>
     <lastmod>2026-05-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -19,7 +19,7 @@
 
   <!-- Services -->
   <url>
-    <loc>https://yourwebsite.com/services</loc>
+    <loc>https://webcraft-free/services</loc>
     <lastmod>2026-05-09</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
@@ -27,7 +27,7 @@
 
   <!-- Pricing -->
   <url>
-    <loc>https://yourwebsite.com/pricing</loc>
+    <loc>https://webcraft-free/pricing</loc>
     <lastmod>2026-05-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
