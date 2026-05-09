@@ -1,0 +1,357 @@
+// FIREBASE SECURITY RULES FOR WEBCRAFT
+// Manager is the superadmin and can manage all app data.
+// Paste this into Firebase Console > Firestore Database > Rules.
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userExists() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function userData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isActive() {
+      return userExists()
+        && userData().status == 'active';
+    }
+
+    function isManager() {
+      return isActive()
+        && userData().role == 'manager';
+    }
+
+    function isAdmin() {
+      return isActive()
+        && userData().role == 'admin';
+    }
+
+    function isManagerOrAdmin() {
+      return isManager() || isAdmin();
+    }
+
+    function isOwner(userId) {
+      return signedIn()
+        && request.auth.uid == userId;
+    }
+
+    function isValidString(value, min, max) {
+      return value is string
+        && value.size() >= min
+        && value.size() <= max;
+    }
+
+    function optionalString(value, max) {
+      return value == null || (value is string && value.size() <= max);
+    }
+
+    // MANAGER SUPERADMIN RULE
+    // Manager can read, create, update, and delete every document in the app.
+    match /{document=**} {
+      allow read, write: if isManager();
+    }
+
+    // USERS
+    match /users/{userId} {
+      // Bootstrap admin/manager login from the app role forms.
+      // This is permissive for your current frontend flow. For production, move this to Cloud Functions.
+      allow create, update: if isOwner(userId)
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.role in ['admin', 'manager']
+        && request.resource.data.status == 'active'
+        && request.resource.data.keys().hasOnly([
+          'uid',
+          'email',
+          'displayName',
+          'role',
+          'photoURL',
+          'createdAt',
+          'emailVerified',
+          'status'
+        ]);
+
+      // If a document already exists as pending/user, allow the same signed-in
+      // account to become admin/manager from the protected role forms.
+      allow update: if isOwner(userId)
+        && request.resource.data.role in ['admin', 'manager']
+        && request.resource.data.status == 'active'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'role',
+          'status',
+          'displayName',
+          'photoURL',
+          'emailVerified',
+          'createdAt'
+        ]);
+
+      allow create: if isOwner(userId)
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.role == 'user'
+        && request.resource.data.status == 'pending'
+        && request.resource.data.keys().hasOnly([
+          'uid',
+          'email',
+          'displayName',
+          'role',
+          'photoURL',
+          'createdAt',
+          'emailVerified',
+          'status'
+        ]);
+
+      allow read: if isOwner(userId) || isManagerOrAdmin();
+
+      allow update: if isOwner(userId)
+        && isActive()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName',
+          'photoURL'
+        ]);
+
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'role'
+        ]);
+
+      allow update: if isManager()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'role'
+        ]);
+
+      allow delete: if isManagerOrAdmin();
+    }
+
+    // PENDING INVITES
+    match /pendingUsers/{pendingId} {
+      allow read, create, update, delete: if isManager();
+    }
+
+    // PUBLIC PROJECTS
+    match /projects/{projectId} {
+      allow read: if true;
+
+      allow create: if isManagerOrAdmin()
+        && request.resource.data.createdBy == request.auth.uid
+        && isValidString(request.resource.data.title, 2, 120)
+        && optionalString(request.resource.data.desc, 500)
+        && isValidString(request.resource.data.tag, 2, 80)
+        && optionalString(request.resource.data.image, 2000000)
+        && optionalString(request.resource.data.link, 700)
+        && optionalString(request.resource.data.price, 40)
+        && request.resource.data.placement in ['project', 'sale', 'both']
+        && request.resource.data.keys().hasOnly([
+          'title',
+          'desc',
+          'tag',
+          'image',
+          'link',
+          'price',
+          'placement',
+          'createdBy',
+          'createdAt'
+        ]);
+
+      allow update, delete: if isManagerOrAdmin();
+    }
+
+    // PUBLIC WEBSITES FOR SALE
+    match /buyWebsites/{websiteId} {
+      allow read: if true;
+
+      allow create: if isManagerOrAdmin()
+        && request.resource.data.createdBy == request.auth.uid
+        && isValidString(request.resource.data.title, 2, 120)
+        && optionalString(request.resource.data.desc, 800)
+        && isValidString(request.resource.data.category, 2, 80)
+        && isValidString(request.resource.data.price, 1, 40)
+        && optionalString(request.resource.data.image, 2000000)
+        && optionalString(request.resource.data.link, 700)
+        && request.resource.data.keys().hasOnly([
+          'title',
+          'desc',
+          'category',
+          'price',
+          'image',
+          'link',
+          'createdBy',
+          'createdAt'
+        ]);
+
+      allow update, delete: if isManagerOrAdmin();
+    }
+
+    // CONTACT / GET IN TOUCH
+    match /contacts/{contactId} {
+      allow create: if request.resource.data.status == 'new'
+        && isValidString(request.resource.data.name, 2, 80)
+        && isValidString(request.resource.data.email, 5, 120)
+        && isValidString(request.resource.data.message, 2, 1000)
+        && request.resource.data.keys().hasOnly([
+          'name',
+          'email',
+          'message',
+          'status',
+          'createdAt'
+        ]);
+
+      allow read: if isManagerOrAdmin();
+
+      allow update: if isManager()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'reply',
+          'status',
+          'repliedBy',
+          'repliedAt'
+        ]);
+
+      allow delete: if isAdmin();
+    }
+
+    // MANAGER NOTIFICATIONS
+    match /notifications/{notificationId} {
+      allow read: if isActive();
+
+      allow create: if isManager()
+        && request.resource.data.sentBy == request.auth.uid
+        && isValidString(request.resource.data.message, 2, 500)
+        && request.resource.data.keys().hasOnly([
+          'message',
+          'sentBy',
+          'createdAt'
+        ]);
+
+      allow update, delete: if isManager();
+    }
+
+    // YOUTUBE ADS ON HOME PAGE
+    match /youtubeAds/{adId} {
+      allow read: if true;
+      allow create: if isManager()
+        && request.resource.data.createdBy == request.auth.uid
+        && isValidString(request.resource.data.url, 8, 700)
+        && isValidString(request.resource.data.videoId, 6, 80)
+        && isValidString(request.resource.data.title, 1, 120)
+        && optionalString(request.resource.data.thumbnail, 700)
+        && request.resource.data.keys().hasOnly([
+          'url',
+          'videoId',
+          'title',
+          'thumbnail',
+          'createdBy',
+          'createdAt'
+        ]);
+      allow update, delete: if isManager();
+    }
+
+    // SITES / USER WEBSITES
+    match /sites/{siteId} {
+      allow read: if isManagerOrAdmin()
+        || (isActive() && resource.data.ownerId == request.auth.uid);
+
+      allow create: if isActive()
+        && request.resource.data.ownerId == request.auth.uid
+        && isValidString(request.resource.data.name, 1, 120)
+        && optionalString(request.resource.data.description, 800)
+        && optionalString(request.resource.data.image, 2000000)
+        && optionalString(request.resource.data.ownerName, 120)
+        && optionalString(request.resource.data.ownerEmail, 160)
+        && request.resource.data.plan in ['free', 'premium', 'vip']
+        && request.resource.data.status in ['active', 'paused']
+        && request.resource.data.keys().hasOnly([
+          'name',
+          'description',
+          'image',
+          'plan',
+          'status',
+          'ownerId',
+          'ownerName',
+          'ownerEmail',
+          'hosted',
+          'createdAt'
+        ]);
+
+      allow update: if isAdmin()
+        || (
+          isActive()
+          && resource.data.ownerId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'name',
+            'description',
+            'image',
+            'plan',
+            'status',
+            'ownerName',
+            'ownerEmail',
+            'hosted'
+          ])
+        );
+
+      allow delete: if isAdmin()
+        || (
+          isActive()
+          && resource.data.ownerId == request.auth.uid
+        );
+    }
+
+    // ADMIN PASSKEYS / INVITE LINKS
+    match /inviteLinks/{linkId} {
+      allow read: if true;
+
+      allow create: if isManager()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.used == false
+        && request.resource.data.keys().hasOnly([
+          'code',
+          'role',
+          'type',
+          'createdBy',
+          'createdAt',
+          'used'
+        ]);
+
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'used',
+          'usedBy',
+          'usedAt'
+        ])
+        && request.resource.data.used == true;
+
+      allow delete: if isManager();
+    }
+
+    // ANALYTICS
+    match /analytics/{docId} {
+      allow read: if isManagerOrAdmin() || isActive();
+      allow create, update, delete: if isManagerOrAdmin();
+    }
+
+    // SETTINGS
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if isManager();
+    }
+  }
+}
+
+// SETUP NOTES
+// 1. Manager account must exist in /users/{uid} with:
+//    role: "manager"
+//    status: "active"
+// 2. Manager has full superadmin access to all Firestore app data.
+// 3. Public users can read projects and buyWebsites without login.
+// 4. New signups are created as status: "pending" and need manager/admin confirmation.
+// 5. For production, move manager/admin secret key logic to Cloud Functions.
