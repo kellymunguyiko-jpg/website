@@ -1,0 +1,19 @@
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://webcraft-free.netlify.app/sitemap.xml
+
+# Optional crawl settings
+Crawl-delay: 1
+
+# Block sensitive folders (optional)
+Disallow: /admin
+Disallow: /private
+Disallow: /dashboard
+
+# Allow important assets
+Allow: /assets/
+Allow: /images/
+Allow: /css/
+Allow: /js/
